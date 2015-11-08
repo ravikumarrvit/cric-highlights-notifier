@@ -1,3 +1,4 @@
+import sys
 import json
 import urllib2
 import PlatformDetector
@@ -5,32 +6,55 @@ import PlatformDetector
 # Uses the APIs provided by http://cricscore-api.appspot.com/
 
 MATCH_URL = "http://cricscore-api.appspot.com/csa"
-SUPPORTING_TEAM = "Nepal"
 PREV_TEAM_SCORE = None
+TOP_TEAMS = ["india", "pakistan", "australia", "south africa", "west indies", "new zealand", "bangladesh", "england", "sri lanka"]
 
 class ScoreReporter:
 
     def __init__(self, logger):
         self.logger = logger
 
-    def get_match_id(self):
+    def get_matches_json(self):
 
         try:
             matches_json = json.load(urllib2.urlopen(MATCH_URL))
         except Exception, e:
             self.logger.error("Not able to connect to the URL - Error: " + str(e))
             self.logger.info("Trying to connect again...")
-            self.get_match_id()
+            self.get_matches_json()
+        return matches_json
+
+    def get_team_list(self):
+
+        team_list = []
+        matches_json = self.get_matches_json()
+
+        for match in matches_json:
+            for key, value in match.iteritems():
+                if key == "t1" or key == "t2":
+                    value = value.strip()
+                    self.logger.debug("Team: " + value)
+                    if value.lower() in TOP_TEAMS:
+                        team_list.append(value)
+        return team_list
+
+    def get_match_id(self, supporting_team):
+
+        matches_json = self.get_matches_json()
+        self.logger.debug("Supporting team: " + supporting_team)
+        self.logger.debug(matches_json)
+
         team_found = False
-        match_id = -1
+        match_id = None
+        temp_id = None
         for match in matches_json:
             for key, value in match.iteritems():
                 if key == "id":
                     temp_id = value
                 if key == "t1" or key == "t2":
-                    if value == SUPPORTING_TEAM:
+                    if value == supporting_team:
                         team_found = True
-                if team_found:
+                if team_found and temp_id:
                     match_id = temp_id
                     break
             if team_found:
@@ -69,7 +93,7 @@ class ScoreReporter:
                     if self.match_over_stumps(value):
                         self.logger.info("Match is over/stumps for the day")
                         self.notify("STATUS", value)
-                        exit(0)
+                        sys.exit(0)
                     team_score = str(value.split("(")[0]).strip()
                     team_score_found = True
                 if team_score_found:
